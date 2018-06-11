@@ -5,60 +5,54 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * Interfaccia che ogni classe che rappresenta un servizio online per il recupero di dati deve implementare.
- * L'effettiva implementazione del meccanismo di autenticazione e recupero dei dati, essendo specifico di ogni servizio,
- * viene delegato alla classe che implementa questa interfaccia.
- * @author cmanf
+ * Interface implemented by every service provider class. The actual implementation, different for each provider, 
+ * is delegated to the class implementing the interface.
+ * @author Christian Manfredi
  *
  */
 public interface IDataSource {
 	
 	/**
-	 * Metodo per controllare se all'interno della banca dati delle credenziali di questo servizio è presente una voce relativa 
-	 * all'utente in questione
+	 * Method to check if there are any stored credential in the data store for the user.
 	 * @param userId
-	 * @return Valore true se le credenziali vengono trovate e sono, quindi, già memorizzate
+	 * @return
 	 * @throws IOException
 	 */
 	abstract public boolean checkAuth(String userId) throws IOException;
 	
 	/**
-	 * Metodo per ottenere il link di redirezione necessario a portare l'utente sulla pagina del provider del servizio affinché
-	 * autorizzi il software a recuperare i dati dalle Web API. Il metodo restituisce un URL.
-	 * 
+	 * Method to build the Uri used to redirect the user to the service provider site to give authorization.
 	 * @param userId
-	 * @param authCallback URL di callback passato al metodo deve essere lo stesso che è stato registrato quando si è richiesta la 
-	 * chiave ed il segreto per utilizzare le API.
+	 * @param authCallback callback URL used when the app was registered on the service provider site. Some providers require
+	 * to specify it with every request.
 	 * @return
 	 * @throws IOException
 	 */
 	abstract public String buildAuthRequest(String userId, String authCallback) throws IOException;
 	
 	/**
-	 * Una volta che l'utente autorizza l'applicazione il provider reindirizza l'utente mediante l'URL di callback passato nella
-	 * richiesta. A questo punto è necessario chiamare questo metodo per salvare le credenziali ottenute all'interno della banca
-	 * dati.
+	 * Once the user has authorized the application, the provider redirect it on the app using the callback URL. This method 
+	 * saves the credentials sent back with the request in the data store.
 	 * @param userId
-	 * @param params Parametri della richiesta ricevuta dal provider, ogni servizio implementa il recupero del parametro di
-	 * interesse, è necessario solo inserire tutti i parametri GET in un HashMap.
+	 * @param params HashMap containing all the parameters of the request
 	 * @throws IOException
 	 */
 	abstract public void saveAuthResponse(String userId, HashMap<String, String> params) throws IOException;
 	
 	/**
-	 * Metodo per richiedere l'aggiornamento di una singola risorsa presso un servizio.
+	 * Updates data of a single resource
 	 * @param userId
-	 * @param name nome della risorsa, utilizzato nel file di configurazione come parametro "name" della risorsa
-	 * @param lastUpdate per eseguire una richiesta incrementale e non richiedere anche i dati già recuperati
+	 * @param name resource name as in the XML config file
+	 * @param lastUpdate
 	 * @return
 	 * @throws IOException
 	 */
 	abstract public String updateData(String userId, String resourceName, long lastUpdate) throws IOException;
 	
 	/**
-	 * Metodo per aggiornare tutte le risorse di un determinato servizio.
+	 * Updates data of all resources
 	 * @param userId
-	 * @param lastUpdate per eseguire una richiesta incrementale e non richiedere anche i dati già recuperati
+	 * @param lastUpdate
 	 * @return
 	 * @throws IOException
 	 */

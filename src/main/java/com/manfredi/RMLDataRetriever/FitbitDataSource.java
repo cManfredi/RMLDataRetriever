@@ -31,68 +31,69 @@ import com.google.api.client.util.store.FileDataStoreFactory;
 public class FitbitDataSource implements IDataSource {
 	
 	/**
-	 * Per la comunicazione con le Web API di Fitbit, mediante protocollo OAuth2, viene utilizzata la libreria Google Client
-	 * OAuth Java ed, in particolare, la classe AuthorizationCodeFlow che si occupa della gestione delle credenziali, della
-	 * creazione ed esecuzione delle richieste HTTP, ecc...
+	 * To communicate with Fitbit Web API using OAuth2 protocol, the Google Client Oauth Java library will be used, in
+	 * particular the AuthorizationCodeFlow class who manages credentials, build requests and executes them as prescribed
+	 * in the Oauth2 protocol.
 	 */
 	private AuthorizationCodeFlow flow = null;
 	
 	/**
-	 * CLIENT_ID e CLIENT_SECRET ottenuti al momento della registrazione dell'applicazione presso Fitbit - DA SOSTITUIRE.
+	 * CLIENT_ID and CLIENT_SECRET obtained when registering RML Data Retriever as a Fitbit app.
 	 */
 	private static final String CLIENT_ID = "22CS9Q";
 	private static final String CLIENT_SECRET = "0a19958ef9828e187b5bfce70ec80538";
 	
 	/**
-	 * URL per la richiesta dei token.
+	 * URL to request token.
 	 */
 	private static final String TOKEN_URL = "https://api.fitbit.com/oauth2/token";
 	
 	/**
-	 * URL per la richiesta dell'autorizzazione - l'utente viene reindirizzato presso questo indirizzo.
+	 * URL to redirect user on the service provider site for authorization.
 	 */
 	private static final String AUTH_URL = "https://api.fitbit.com/oauth2/authorize";
 	
 	/**
-	 * Prefisso utilizzato per la creazione di file e per il salvataggio delle credenziali.
+	 * Prefix for data related to this class.
 	 */
 	private static final String PREFIX = "fitbit";
 	
 	/**
-	 * Scope e Risorse vengono caricati tramite file di configurazione XML alla creazione dell'istanza.
-	 * Gli scope vengono utilizzati in fase di autorizzazione mentre le risorse per il recupero dei dati.
+	 * Scopes and Resources are loaded via XML configuration file when an instance is created.
+	 * Scopes are used to request authorization to the provider while Resources hold informations used when making 
+	 * requests.
 	 */
 	private List<String> scopes;
 	private HashMap<String, WebResource> resources;
 	
 	/**
-	 * Percorso del file di configurazione per Scope e Risorse.
+	 * XML configuration file path.
 	 */
 	private static final java.io.File CONFIG_FILE =
 		      new java.io.File(System.getProperty("user.home"), "DataRetriever/config/" + PREFIX + ".xml");
 	
 	/**
-	 * Percorso per il salvataggio delle credenziali OAuth.
+	 * Path of the File Data Store to save OAuth credentials.
 	 */
 	private static final java.io.File CREDENTIAL_STORE_DIR =
 		      new java.io.File(System.getProperty("user.home"), ".store/data_retriever/" + PREFIX);
 	
 	/**
-	 * Percorso per il salvataggio dei dati recuperati da remoto.
+	 * Path of the directory where all the retrieved data is saved.
 	 */
 	private static final java.io.File DATA_STORE_DIR =
 		      new java.io.File(System.getProperty("user.home"), "DataRetriever/" + PREFIX + "-data");
 	
 	/**
-	 * All'interno del costruttore vengono inizializzati Scope e Risorse e successivamente creata l'istanza di AuthorizationCodeFlow
-	 * con i parametri necessari.
+	 * In the constructor scopes and resources are initialized and the AuthorizationCodeFlow instance is created with the
+	 * right data.
 	 * @throws IOException
 	 * @throws ConfigurationException
 	 */
 	public FitbitDataSource() throws IOException, ConfigurationException{
-		// Inizializzazione da file mediante Apache Common Configurations
+		// Init
 		this.initResources();
-		// Creazione AuthorizationCodeFlow
+		// Creating AuthorizationCodeFlow
 		this.flow = new AuthorizationCodeFlow.Builder(
 			BearerToken.authorizationHeaderAccessMethod(),
 		    new NetHttpTransport(),
@@ -101,9 +102,8 @@ public class FitbitDataSource implements IDataSource {
 		    new BasicAuthentication(CLIENT_ID, CLIENT_SECRET),
 		    CLIENT_ID,
 		    AUTH_URL)
-		// Viene utilizzato il salvataggio delle credenziali su file
+		// storing credentials on a file
 		.setDataStoreFactory(new FileDataStoreFactory(CREDENTIAL_STORE_DIR))
-		// E' necessario definire gli Scope utilizzati
 		.setScopes(this.scopes)
 		.build();
 	}
@@ -114,33 +114,32 @@ public class FitbitDataSource implements IDataSource {
 	}
 
 	public String buildAuthRequest(String userId, String authCallback) throws IOException {
-		// Ritorna l'URL per reindirizzare l'utente alla pagina di autorizzazione presso il provider
+		// Returns the Url to redirect the user on the service provider site
 		return this.flow.newAuthorizationUrl().setRedirectUri(authCallback).build();
 	}
 
 	public void saveAuthResponse(String userId, HashMap<String, String> params) throws IOException {
-		// Fitbit prevede il passaggio di un parametro GET contenente un codice da utilizzare nella richiesta per Access Token
+		// Getting the authorization code from the request
 		String code = params.get("code");
-		// Viene impostato l'URI di redirezione anche in questa richiesta solo perch� richiesto dal provider, altrimenti restituisce
-		// un errore
+		// Requesting the access token - without redirect Uri the API returns an error
 		TokenResponse response = 
 				this.flow.newTokenRequest(code)
 				.setRedirectUri("http://localhost:8080/RMLDataRetriever/AuthCallback")
 				.execute();
-		// Una volta ottenuto il token in risposta vengono salvate le credenziali
+		// Saving token in credential data store
 		this.flow.createAndStoreCredential(response, PREFIX + "-" + userId);
 	}
 
 	public String updateData(String userId, String resourceName, long lastUpdate) throws IOException {
-		// resourceName deve essere una delle stringhe definite nel file di configurazione, altrimenti non accade nulla
+		// resourceName must be a string used to define the name of a resource in the XML config file
 		WebResource res = this.resources.get(resourceName);
 		if(res != null){
-			// Caricamento delle credenziali salvate, updateData non dovrebbe essere chiamato se le credenziali non sono presenti
+			// Loading credentials
 			Credential credentials = this.flow.loadCredential(PREFIX + "-" + userId);
 			if(credentials != null){
-				// Invio della richiesta per la risorsa di interesse
+				// Building request factory with credentials
 				HttpRequestFactory factory = this.flow.getTransport().createRequestFactory(credentials);
-				// Viene restituito il percorso del file appena creato in modo che possa essere subito elaborato
+				// In case the file with the retrieved data is successfully created the path is returned, otherwise null
 				return getAndSave(factory, res, lastUpdate);
 			} else {
 				return null;
@@ -151,13 +150,11 @@ public class FitbitDataSource implements IDataSource {
 	}
 
 	public String[] updateAllData(String userId, long lastUpdate) throws IOException {
-		// In questo caso viene effettuata una richiesta per ogni risorsa configurata e vengono restituiti i percorsi a tutti i file
-		// creati
+		// One request for each Resource - see comments on updateData
 		ArrayList<String> paths = new ArrayList<String>();
 		Credential credentials = this.flow.loadCredential(PREFIX + "-" + userId);
 		if(credentials != null){
 			HttpRequestFactory factory = this.flow.getTransport().createRequestFactory(credentials);
-			// Si invia una richiesta per ogni risorsa
 			for(WebResource resource : this.resources.values()){
 				paths.add(getAndSave(factory, resource, lastUpdate));
 			}
@@ -168,60 +165,61 @@ public class FitbitDataSource implements IDataSource {
 	}
 	
 	/**
-	 * Metodo per leggere da file gli Scopes e le risorse di interesse per il servizio fitbit
+	 * Init method - config is stored in an XML file
 	 * @throws ConfigurationException 
 	 */
 	private void initResources() throws ConfigurationException{
-		// Consultare la guida online per Apache Common Configurations
+		// Read online user guide for Apache Common Configurations
 		Configurations configs = new Configurations();
 	    XMLConfiguration config = configs.xml(CONFIG_FILE.getAbsolutePath());
 	    //Scopes
 	    this.scopes = config.getList(String.class, "scopes.scope");
-	    //Risorse
+	    //Resources
 	    HashMap<String, WebResource> resources = new HashMap<>();
 	    List fields = config.configurationsAt("resources.resource");
 	    for(Iterator i = fields.iterator(); i.hasNext();){
 	    	BaseHierarchicalConfiguration bhc = (BaseHierarchicalConfiguration) i.next();
+	    	// Resources are stored in an HashMap using name as key and WebResource instance as value
 	    	resources.put(bhc.getString("name"), new WebResource(bhc.getString("fileNameToFormat"), bhc.getString("pathToFormat")));
 	    }
 	    this.resources = resources;
 	}
 	
 	private String getAndSave(HttpRequestFactory factory, WebResource res, long lastUpdate) throws IOException{
-		// Formatto la risorsa specificando la data se richiesta, alcune richiesta prevedono che venga specificato il periodo d'interesse
+		// Format request url parameters to specify, if needed, when it was last updated
 		Date lastUpdateDate = new Date(lastUpdate);
-		// Richiedo i dati fino ad ora
+		// Date of current execution
 		Date now = new Date();
-		// Formatto le date in modo che vengano accettate dal provider
+		// Formatting dates to be accepted by service provider
 		SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
-		// Path della risorsa online
+		// Online resource URI, got from config file and formatted with parameters
 		String path = String.format(res.getResourcePathToFormat(), formatter.format(lastUpdateDate), formatter.format(now));
-		// Nome del file per il salvataggio in locale - prevede sempre e solo che venga specificato il timestamp attuale
+		// File name of the file where data will be saved, encoded with timestamp of creation
 		String fileName = String.format(res.getResourceFileName(), now.getTime() / 1000);
-		// Invio la richiesta e recupero la risposta
+		// Building and executing request
 		HttpResponse response = factory.buildGetRequest(new GenericUrl("https://api.fitbit.com/1/user/-/" + path + ".json")).execute();
 		
-		// Se non ci sono errori salvo il JSON in un file nella cartella specificata
+		// If there are no errors, saving data to JSON file
 		
-		//Check sulla cartella di salvataggio
+		// Check on directory
 		if(!DATA_STORE_DIR.isDirectory()){
 			DATA_STORE_DIR.mkdirs();
 		}
-		//Creo il file
+		// Creating file reference
 		java.io.File file = new java.io.File(DATA_STORE_DIR.getAbsolutePath(), fileName);
 		FileOutputStream fos = new FileOutputStream(file);
-		//Recupero il contenuto della risposta, un JSON
+		// Content of response in JSON
 		InputStream is = response.getContent();
-		//Scrivo su file
+		// Writing on file
 		int read = 0;
 		byte[] buffer = new byte[32768];
 		while( (read = is.read(buffer)) > 0) {
 		  fos.write(buffer, 0, read);
 		}
-		// Chiudo gli stream
+		// Closing streams
 		fos.close();
 		is.close();
-		// Restituisco il percorso al file appena creato
+		// Returning path to written file
 		return file.getAbsolutePath();
 	}
 	
