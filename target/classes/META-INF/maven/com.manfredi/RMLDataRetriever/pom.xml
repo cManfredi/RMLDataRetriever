@@ -4,13 +4,15 @@
 
   <groupId>com.manfredi</groupId>
   <artifactId>RMLDataRetriever</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.9</version>
   <packaging>jar</packaging>
 
   <name>RMLDataRetriever</name>
   <url>http://maven.apache.org</url>
 
   <properties>
+  	<maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -46,4 +48,5 @@
 	    <version>1.9.3</version>
 	</dependency>
   </dependencies>
+  
 </project>

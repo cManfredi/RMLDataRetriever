@@ -74,22 +74,20 @@ public class NokiaHealthDataSource implements IDataSource {
 	private HashMap<String, WebResource> resources;
 	
 	/**
-	 * Path of the XML configuration file.
+	 * XML configuration file path.
 	 */
 	private static final java.io.File CONFIG_FILE =
-		      new java.io.File(System.getProperty("user.home"), "DataRetriever/config/" + PREFIX + ".xml");
+		      new java.io.File(System.getProperty("user.home"), "RMLDataRetriever/config/" + PREFIX + ".xml");
 	
 	/**
-	 * Path of the File Data Store.
+	 * Path of the File Data Store to save OAuth credentials.
 	 */
-	private static final java.io.File CREDENTIAL_STORE_DIR =
-		      new java.io.File(System.getProperty("user.home"), ".store/data_retriever/" + PREFIX);
+	private java.io.File CREDENTIAL_STORE_DIR;
 	
 	/**
 	 * Path of the directory where all the retrieved data is saved.
 	 */
-	private static final java.io.File DATA_STORE_DIR =
-		      new java.io.File(System.getProperty("user.home"), "DataRetriever/" + PREFIX + "-data");
+	private java.io.File DATA_STORE_DIR;
 	
 	public NokiaHealthDataSource() throws IOException, ConfigurationException{
 		log("Init resources");
@@ -339,7 +337,11 @@ public class NokiaHealthDataSource implements IDataSource {
 	private void initResources() throws ConfigurationException{
 		// Read online user guide for Apache Common Configurations
 		Configurations configs = new Configurations();
-	    XMLConfiguration config = configs.xml(CONFIG_FILE.getAbsolutePath());
+		XMLConfiguration config = configs.xml(CONFIG_FILE.getAbsolutePath());
+	    // Credential store dir
+	    this.CREDENTIAL_STORE_DIR = new java.io.File(config.getString("credentialStoreDir"));
+	    // Data store dir
+	    this.DATA_STORE_DIR = new java.io.File(config.getString("dataStoreDir"));
 	    //Scopes
 	    this.scopes = config.getList(String.class, "scopes.scope");
 	    //Resources

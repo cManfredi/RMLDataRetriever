@@ -70,19 +70,17 @@ public class FitbitDataSource implements IDataSource {
 	 * XML configuration file path.
 	 */
 	private static final java.io.File CONFIG_FILE =
-		      new java.io.File(System.getProperty("user.home"), "DataRetriever/config/" + PREFIX + ".xml");
+		      new java.io.File(System.getProperty("user.home"), "RMLDataRetriever/config/" + PREFIX + ".xml");
 	
 	/**
 	 * Path of the File Data Store to save OAuth credentials.
 	 */
-	private static final java.io.File CREDENTIAL_STORE_DIR =
-		      new java.io.File(System.getProperty("user.home"), ".store/data_retriever/" + PREFIX);
+	private java.io.File CREDENTIAL_STORE_DIR;
 	
 	/**
 	 * Path of the directory where all the retrieved data is saved.
 	 */
-	private static final java.io.File DATA_STORE_DIR =
-		      new java.io.File(System.getProperty("user.home"), "DataRetriever/" + PREFIX + "-data");
+	private java.io.File DATA_STORE_DIR;
 	
 	/**
 	 * In the constructor scopes and resources are initialized and the AuthorizationCodeFlow instance is created with the
@@ -172,6 +170,10 @@ public class FitbitDataSource implements IDataSource {
 		// Read online user guide for Apache Common Configurations
 		Configurations configs = new Configurations();
 	    XMLConfiguration config = configs.xml(CONFIG_FILE.getAbsolutePath());
+	    // Credential store dir
+	    this.CREDENTIAL_STORE_DIR = new java.io.File(config.getString("credentialStoreDir"));
+	    // Data store dir
+	    this.DATA_STORE_DIR = new java.io.File(config.getString("dataStoreDir"));
 	    //Scopes
 	    this.scopes = config.getList(String.class, "scopes.scope");
 	    //Resources
