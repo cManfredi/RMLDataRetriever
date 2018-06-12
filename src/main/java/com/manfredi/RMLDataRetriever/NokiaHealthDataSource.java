@@ -60,7 +60,7 @@ public class NokiaHealthDataSource implements IDataSource {
 	private static final String ACCESS_TOKEN_URL = "https://developer.health.nokia.com/account/access_token";
 	
 	/** Request data Url */
-	private static final String REQUEST_DATA_URL = "https://api.health.nokia.com/v2/measure";
+	private static final String REQUEST_DATA_URL = "https://api.health.nokia.com/measure";
 	
 	/** Prefix */
 	private static final String PREFIX = "nokia-health";
@@ -70,7 +70,7 @@ public class NokiaHealthDataSource implements IDataSource {
 	 * Scopes are used to request authorization to the provider while Resources hold informations used when making 
 	 * requests.
 	 */
-	private List<String> scopes;
+//	private List<String> scopes;
 	private HashMap<String, WebResource> resources;
 	
 	/**
@@ -90,43 +90,36 @@ public class NokiaHealthDataSource implements IDataSource {
 	private java.io.File DATA_STORE_DIR;
 	
 	public NokiaHealthDataSource() throws IOException, ConfigurationException{
-		log("Init resources");
 		// Init from config file
 		this.initResources();
 		//The data store contains simple strings
-		log("Init data store");
 		this.dataStore = new FileDataStoreFactory(CREDENTIAL_STORE_DIR).getDataStore("NokiaHealthStore");
-		log("Init request factory");
 		// Factory used to build HTTP requests
 		this.reqFactory = new NetHttpTransport().createRequestFactory();
 	}
 
 	@Override
 	public boolean checkAuth(String userId) throws IOException {
-		log("checking auth with id: "+ PREFIX + "-" + userId + "-token");
 		// Check if a token is already stored for this user
 		return this.dataStore.get(PREFIX + "-" + userId + "-token") != null;
 	}
 
 	@Override
 	public String buildAuthRequest(String userId, String authCallback) throws IOException {
-		log("BUILD AUTH REQUEST");
 		String urlToReturn = null;
-		log("creating tokenParamsBuilder");
 		// Get parameters string without signature
-		String tokenParams = generateParamsString(authCallback, null, null);
-		log("generating signature for baseString: "+ generateBaseString(REQUEST_TOKEN_URL, tokenParams));
+		TreeMap<String, String> paramsTreeToken = getParamsTree();
+		paramsTreeToken.put("oauth_callback", URLEncoder.encode(authCallback, "UTF-8"));
 		// Generate the signature based on the parameters in the request
-		String signToken = computeSignature(generateBaseString(REQUEST_TOKEN_URL, tokenParams), null);
-		log("adding signature: " + signToken);
+		String signToken = computeSignature(generateBaseString(REQUEST_TOKEN_URL, buildTree(paramsTreeToken)), null);
 		// Add the signature to the list of parameters
-		tokenParams = generateParamsString(authCallback, null, signToken);
+		paramsTreeToken.put("oauth_signature", signToken);
+		// Get list of parameters
+		String tokenParams = buildTree(paramsTreeToken);
 		// Execute the request
-		log("executing request");
 		HttpResponse response = this.reqFactory.buildGetRequest(new GenericUrl(REQUEST_TOKEN_URL + "?" + tokenParams)).execute();
 		// Extract the response as a String to verify it is not empty
 		String content = response.parseAsString();
-		log("extracting content - null? " + (content == null));
 		if(content != ""){
 			// Get the tokens from the response
 			String[] vals = content.split("&", 2);
@@ -140,22 +133,18 @@ public class NokiaHealthDataSource implements IDataSource {
 					tokenSecret = parts[1];
 				}
 			}
-			log("TEMPORARY token: " + token + " - tokenSecret: " + tokenSecret);
 			// Save the temporary tokens in the data store, to be replaced with definitive ones
-			log("saving temporary tokens");
 			this.dataStore.set(PREFIX + "-" + userId + "-token-temp", token);
 			this.dataStore.set(PREFIX + "-" + userId + "-tokenSecret-temp", tokenSecret);
-			log("Building auth redirect url");
 			// Build request to redirect user on the service provider site
-			String authParams = generateParamsString(null, token, null);
+			TreeMap<String, String> paramsTreeAuth = getParamsTree();
+			paramsTreeAuth.put("oauth_callback", URLEncoder.encode(authCallback, "UTF-8"));
+			paramsTreeAuth.put("oauth_token", token);
 			// Build signature, this time using also the temporary secret token received
-			log("generating signature for baseString: "+ generateBaseString(AUTHORIZE_URL, authParams));
-			String signAuth = computeSignature(generateBaseString(AUTHORIZE_URL, authParams), tokenSecret);
+			String signAuth = computeSignature(generateBaseString(AUTHORIZE_URL, buildTree(paramsTreeAuth)), tokenSecret);
 			// Add signature to parameters
-			log("adding signature: " + signAuth);
-			authParams = generateParamsString(null, token, signAuth);
-			urlToReturn = this.reqFactory.buildGetRequest(new GenericUrl(AUTHORIZE_URL + "?" + authParams)).getUrl().build();
-			log("returning url: " + urlToReturn);
+			paramsTreeAuth.put("oauth_signature", signAuth);
+			urlToReturn = this.reqFactory.buildGetRequest(new GenericUrl(AUTHORIZE_URL + "?" + buildTree(paramsTreeAuth))).getUrl().build();
 		} else {
 			return null;
 		}
@@ -164,28 +153,22 @@ public class NokiaHealthDataSource implements IDataSource {
 
 	@Override
 	public void saveAuthResponse(String userId, HashMap<String, String> params) throws IOException {
-		log("SAVE AUTH RESPONSE");
 		// Save the userId of the Nokia service, received with the request
 		this.dataStore.set(PREFIX + "-" + userId + "-userId", params.get("userid"));
-		log("got nokia id: "+ params.get("userid"));
 		// Get temporary token from data store
 		String token = this.dataStore.get(PREFIX + "-" + userId + "-token-temp");
-		log("temporary token: " + token);
 		// Get temporary secret token from data store
 		String tokenSecret = this.dataStore.get(PREFIX + "-" + userId + "-tokenSecret-temp");
-		log("temporary token secret: " + tokenSecret);
 		// Build request to get definitive tokens
-		String tokenParams = generateParamsString(null, token, null);
-		log("generating signature for baseString: "+ generateBaseString(ACCESS_TOKEN_URL, tokenParams));
+		TreeMap<String, String> paramsTree = getParamsTree();
+		paramsTree.put("oauth_token", token);
 		// Compute signature
-		String signAuth = computeSignature(generateBaseString(ACCESS_TOKEN_URL, tokenParams), tokenSecret);
-		log("adding signature: " + signAuth);
+		String signAuth = computeSignature(generateBaseString(ACCESS_TOKEN_URL, buildTree(paramsTree)), tokenSecret);
 		// Add signature to parameters
-		tokenParams = generateParamsString(null, token, signAuth);
+		paramsTree.put("oauth_signature", signAuth);
 		// As before, parse response to save definitive tokens
-		HttpResponse response = this.reqFactory.buildGetRequest(new GenericUrl(ACCESS_TOKEN_URL + "?" + tokenParams)).execute();
+		HttpResponse response = this.reqFactory.buildGetRequest(new GenericUrl(ACCESS_TOKEN_URL + "?" + buildTree(paramsTree))).execute();
 		String content = response.parseAsString();
-		log("extracting content - null? " + (content == null));
 		if(content != ""){
 			String[] vals = content.split("&", 4);
 			token = "";
@@ -203,22 +186,18 @@ public class NokiaHealthDataSource implements IDataSource {
 			this.dataStore.set(PREFIX + "-" + userId + "-tokenSecret", tokenSecret);
 			this.dataStore.delete(PREFIX + "-" + userId + "-token-temp");
 			this.dataStore.delete(PREFIX + "-" + userId + "-tokenSecret-temp");
-			log("DEFINITIVE token: " + token + " - tokenSecret: " + tokenSecret);
 		}
 	}
 
 	@Override
 	public String updateData(String userId, String resourceName, long lastUpdate) throws IOException {
-		log("UPDATE SINGLE RESOURCE");
 		// resourceName, since resources are loaded from config file, has to match the resource name of the config
 		WebResource res = this.resources.get(resourceName);
 		if(res != null){
 			// Get nokiaID, token and secret token from data store
 			String nokiaId = this.dataStore.get(PREFIX + "-" + userId + "-userId");
-			log("nokia id: "+nokiaId);
 			String token = this.dataStore.get(PREFIX + "-" + userId + "-token");
 			String tokenSecret = this.dataStore.get(PREFIX + "-" + userId + "-tokenSecret");
-			log("token: "+token+" - tokenSecret: "+tokenSecret);
 			if(nokiaId != null && token != null && tokenSecret != null){
 				// In case the file with the retrieved data is successfully created the path is returned, otherwise null
 				return getAndSave(res, token, tokenSecret, nokiaId, lastUpdate);
@@ -232,57 +211,38 @@ public class NokiaHealthDataSource implements IDataSource {
 
 	@Override
 	public String[] updateAllData(String userId, long lastUpdate) throws IOException {
-		log("UPDATE ALL RESOURCES");
 		// One request for each Resource
 		ArrayList<String> paths = new ArrayList<String>();
 		// Get nokiaID, token and secret token from data store
 		String nokiaId = this.dataStore.get(PREFIX + "-" + userId + "-userId");
-		log("nokia id: "+nokiaId);
 		String token = this.dataStore.get(PREFIX + "-" + userId + "-token");
 		String tokenSecret = this.dataStore.get(PREFIX + "-" + userId + "-tokenSecret");
-		log("token: "+token+" - tokenSecret: "+tokenSecret);
 		if(nokiaId != null && token != null && tokenSecret != null){
 			// As before
 			for(WebResource resource : this.resources.values()){
 				paths.add(getAndSave(resource, token, tokenSecret, nokiaId, lastUpdate));
 			}
 			// Returns array of paths
-			return (String[]) paths.toArray();
+			String[] toReturn = new String[paths.size()];
+			toReturn = paths.toArray(toReturn);
+			return toReturn;
 		} else {
 			return null;
 		}
 	}
 	
 	private String generateNonce() {
-		log("generating nonce");
 		return Long.toHexString(Math.abs(RANDOM.nextLong()));
 	}
 	
 	private String generateTimestamp(){
-		log("generating timestamp");
 		return Long.toString(System.currentTimeMillis() / 1000);
 	}
 	
-	private String generateParamsString(String authCallback, String token, String signature) throws UnsupportedEncodingException{
-		// Building parameters string, alphabetically ordered, as requested by Nokia Health API
-		TreeMap<String, String> params = new TreeMap<>();
-		if(authCallback != null){	
-			params.put("oauth_callback", URLEncoder.encode(authCallback, "UTF-8"));
-		}
-		params.put("oauth_consumer_key", CONSUMER_KEY);
-		params.put("oauth_nonce", generateNonce());
-		if(signature != null){
-			params.put("oauth_signature", URLEncoder.encode(signature, "UTF-8"));
-		}
-		params.put("oauth_signature_method", "HMAC-SHA1");
-		params.put("oauth_timestamp", generateTimestamp());
-		if(token != null){
-			params.put("oauth_token", token);
-		}
-		params.put("oauth_version", "1.0");
+	private String buildTree(TreeMap<String, String> map){
 		StringBuilder paramsBuilder = new StringBuilder();
 		boolean first = true;
-		for(Map.Entry<String, String> param : params.entrySet()){
+		for(Map.Entry<String, String> param : map.entrySet()){
 			if(first){
 				first = false;
 			} else {
@@ -293,7 +253,18 @@ public class NokiaHealthDataSource implements IDataSource {
 		return paramsBuilder.toString();
 	}
 	
-	private String generateBaseString(String url, String paramsString) throws UnsupportedEncodingException{
+	private TreeMap<String, String> getParamsTree() throws UnsupportedEncodingException{
+		// Building parameters string, alphabetically ordered, as requested by Nokia Health API
+		TreeMap<String, String> params = new TreeMap<>();
+		params.put("oauth_consumer_key", CONSUMER_KEY);
+		params.put("oauth_nonce", generateNonce());
+		params.put("oauth_signature_method", "HMAC-SHA1");
+		params.put("oauth_timestamp", generateTimestamp());
+		params.put("oauth_version", "1.0");
+		return params;
+	}
+	
+	private String generateBaseString(String url, String params) throws UnsupportedEncodingException{
 		String baseString = null;
 		// Generating base string, made of HTTP method, URL and parameters
 		StringBuilder buffer = new StringBuilder();
@@ -302,7 +273,7 @@ public class NokiaHealthDataSource implements IDataSource {
 		// URL
 		buffer.append("&").append(URLEncoder.encode(url, "UTF-8"));
 		// Parameters
-		buffer.append("&").append(URLEncoder.encode(paramsString, "UTF-8"));
+		buffer.append("&").append(URLEncoder.encode(params, "UTF-8"));
 		baseString = buffer.toString();
 		return baseString;
 	}
@@ -342,8 +313,6 @@ public class NokiaHealthDataSource implements IDataSource {
 	    this.CREDENTIAL_STORE_DIR = new java.io.File(config.getString("credentialStoreDir"));
 	    // Data store dir
 	    this.DATA_STORE_DIR = new java.io.File(config.getString("dataStoreDir"));
-	    //Scopes
-	    this.scopes = config.getList(String.class, "scopes.scope");
 	    //Resources
 	    HashMap<String, WebResource> resources = new HashMap<>();
 	    List fields = config.configurationsAt("resources.resource");
@@ -359,34 +328,31 @@ public class NokiaHealthDataSource implements IDataSource {
 	}
 	
 	private String getAndSave(WebResource res, String token, String tokenSecret, String nokiaId, long lu) throws IOException{
-		log("GET AND SAVE");
 		// Format request url parameters to specify, if needed, the last update timestamp
 		int lastUpdate = (int) (lu / 1000L);
-		log("last update: "+lastUpdate);
 		// Timestamp of current execution
 		int now = (int) (System.currentTimeMillis() / 1000L);
-		log("now: "+now);
 		// Online resource URI, got from config file and formatted with parameters
 		String path = String.format(res.getResourcePathToFormat(), nokiaId, lastUpdate);
-		log("path: "+path);
 		// File name of the file where data will be saved, encoded with timestamp of creation
 		String fileName = String.format(res.getResourceFileName(), now);
-		log("filename: "+fileName);
 		// Building request with the usual process
-		String tokenParams = generateParamsString(null, token, null);
-		log("generating signature for baseString: "+ generateBaseString(REQUEST_DATA_URL,path + "&" +  tokenParams));
+		TreeMap<String, String> paramsTree = getParamsTree();
+		paramsTree.put("oauth_token", token);
+		//Adding parameters from path to build Tree to be ordered alphabetically
+		String[] pathParams = path.split("&");
+		for(String tuple : pathParams){
+			String[] parts = tuple.split("=");
+			paramsTree.put(parts[0], parts[1]);
+		}
 		// Adding the computed signature
-		String signReq = computeSignature(generateBaseString(REQUEST_DATA_URL, path + "&" + tokenParams), tokenSecret);
-		log("adding signature: "+signReq);
-		tokenParams = generateParamsString(null, token, signReq);
-		log("Url:" + REQUEST_DATA_URL + "?" + path + "&" + tokenParams);
+		String signReq = computeSignature(generateBaseString(REQUEST_DATA_URL, buildTree(paramsTree)), tokenSecret);
+		paramsTree.put("oauth_signature", signReq);
 		// Execute request
-		HttpResponse response = this.reqFactory.buildGetRequest(new GenericUrl(REQUEST_DATA_URL + "?" + path + "&" + tokenParams)).execute();
+		HttpResponse response = this.reqFactory.buildGetRequest(new GenericUrl(REQUEST_DATA_URL + "?" + buildTree(paramsTree))).execute();
 		// Checking content
-		String content = response.parseAsString();
-		log("extracting content: "+content);
 		
-		// If there are no errors, saving data to JSON file
+		// saving data to JSON file
 		
 		// Check on directory
 		if(!DATA_STORE_DIR.isDirectory()){
@@ -398,7 +364,6 @@ public class NokiaHealthDataSource implements IDataSource {
 		FileOutputStream fos = new FileOutputStream(file);
 		// Content of response in JSON
 		InputStream is = response.getContent();
-		log("Starting reading the content and saving on file");
 		// Writing on file
 		int read = 0;
 		byte[] buffer = new byte[32768];
@@ -410,10 +375,6 @@ public class NokiaHealthDataSource implements IDataSource {
 		is.close();
 		// Returning path to written file
 		return file.getAbsolutePath();
-	}
-	
-	private static void log(String msg){
-		System.out.println("[LOG Nokia] : " + msg);
 	}
 	
 }
