@@ -40,8 +40,8 @@ public class FitbitDataSource implements IDataSource {
 	/**
 	 * CLIENT_ID and CLIENT_SECRET obtained when registering RML Data Retriever as a Fitbit app.
 	 */
-	private static final String CLIENT_ID = "22CS9Q";
-	private static final String CLIENT_SECRET = "0a19958ef9828e187b5bfce70ec80538";
+	private static final String CLIENT_ID = "22D2DB";
+	private static final String CLIENT_SECRET = "cc2226100760d748bb40a2689057e32b";
 	
 	/**
 	 * URL to request token.
@@ -138,7 +138,7 @@ public class FitbitDataSource implements IDataSource {
 				// Building request factory with credentials
 				HttpRequestFactory factory = this.flow.getTransport().createRequestFactory(credentials);
 				// In case the file with the retrieved data is successfully created the path is returned, otherwise null
-				return getAndSave(factory, res, lastUpdate);
+				return getAndSave(factory, res, userId, lastUpdate);
 			} else {
 				return null;
 			}
@@ -154,7 +154,7 @@ public class FitbitDataSource implements IDataSource {
 		if(credentials != null){
 			HttpRequestFactory factory = this.flow.getTransport().createRequestFactory(credentials);
 			for(WebResource resource : this.resources.values()){
-				paths.add(getAndSave(factory, resource, lastUpdate));
+				paths.add(getAndSave(factory, resource, userId, lastUpdate));
 			}
 			return (String[]) paths.toArray();
 		} else {
@@ -187,7 +187,7 @@ public class FitbitDataSource implements IDataSource {
 	    this.resources = resources;
 	}
 	
-	private String getAndSave(HttpRequestFactory factory, WebResource res, long lastUpdate) throws IOException{
+	private String getAndSave(HttpRequestFactory factory, WebResource res, String userId, long lastUpdate) throws IOException{
 		// Format request url parameters to specify, if needed, when it was last updated
 		Date lastUpdateDate = new Date(lastUpdate);
 		// Date of current execution
@@ -197,7 +197,7 @@ public class FitbitDataSource implements IDataSource {
 		// Online resource URI, got from config file and formatted with parameters
 		String path = String.format(res.getResourcePathToFormat(), formatter.format(lastUpdateDate), formatter.format(now));
 		// File name of the file where data will be saved, encoded with timestamp of creation
-		String fileName = String.format(res.getResourceFileName(), now.getTime() / 1000);
+		String fileName = String.format(res.getResourceFileName(), userId, now.getTime() / 1000);
 		// Building and executing request
 		HttpResponse response = factory.buildGetRequest(new GenericUrl("https://api.fitbit.com/1/user/-/" + path + ".json")).execute();
 		

@@ -200,7 +200,7 @@ public class NokiaHealthDataSource implements IDataSource {
 			String tokenSecret = this.dataStore.get(PREFIX + "-" + userId + "-tokenSecret");
 			if(nokiaId != null && token != null && tokenSecret != null){
 				// In case the file with the retrieved data is successfully created the path is returned, otherwise null
-				return getAndSave(res, token, tokenSecret, nokiaId, lastUpdate);
+				return getAndSave(res, token, tokenSecret, nokiaId, userId, lastUpdate);
 			} else {
 				return null;
 			}
@@ -220,7 +220,7 @@ public class NokiaHealthDataSource implements IDataSource {
 		if(nokiaId != null && token != null && tokenSecret != null){
 			// As before
 			for(WebResource resource : this.resources.values()){
-				paths.add(getAndSave(resource, token, tokenSecret, nokiaId, lastUpdate));
+				paths.add(getAndSave(resource, token, tokenSecret, nokiaId, userId, lastUpdate));
 			}
 			// Returns array of paths
 			String[] toReturn = new String[paths.size()];
@@ -327,7 +327,7 @@ public class NokiaHealthDataSource implements IDataSource {
 	    this.resources = resources;
 	}
 	
-	private String getAndSave(WebResource res, String token, String tokenSecret, String nokiaId, long lu) throws IOException{
+	private String getAndSave(WebResource res, String token, String tokenSecret, String nokiaId, String userId, long lu) throws IOException{
 		// Format request url parameters to specify, if needed, the last update timestamp
 		int lastUpdate = (int) (lu / 1000L);
 		// Timestamp of current execution
@@ -335,7 +335,7 @@ public class NokiaHealthDataSource implements IDataSource {
 		// Online resource URI, got from config file and formatted with parameters
 		String path = String.format(res.getResourcePathToFormat(), nokiaId, lastUpdate);
 		// File name of the file where data will be saved, encoded with timestamp of creation
-		String fileName = String.format(res.getResourceFileName(), now);
+		String fileName = String.format(res.getResourceFileName(), userId, now);
 		// Building request with the usual process
 		TreeMap<String, String> paramsTree = getParamsTree();
 		paramsTree.put("oauth_token", token);
